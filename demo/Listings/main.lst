@@ -1,0 +1,604 @@
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keil5\C51\BIN\C51.EXE main.c OPTIMIZE(9,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main.l
+                    -st) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          #include "LCD1602.h"
+   3          #include "DS1302.h"
+   4          #include "Key.h"
+   5          #include "Timer.h"
+   6          #include "Buzzer.h"
+   7          #include "Delay.h"
+   8          #include "UART.h"
+   9          #include "I2C.h"
+  10          #include "AT24C02.h"
+  11          #include "DHT11.h"
+  12          
+  13          sbit HC_SR501 = P2^3; //人体检测模块IO口
+  14           
+  15          uchar MODE1, MODE2, Timesetselect, flag, warning, upflag_2;
+  16          uchar Tempflag, Alarmflag, upflag, runflag, getupflag, startflag, saveflag;
+  17          uchar dataGetBuff[5] = {0};
+  18          uchar dataGetBuffCount = 0;
+  19          uchar code tempstr[5] = "Temp:";
+  20          uchar code humistr[5] = "Humi:";
+  21          uchar code welcome[8] = "Current ";
+  22          uchar code end[8] = "Wake Up!";
+  23          uchar code back[3] = "\r\n";
+  24          
+  25          char alarm_time[] = {00, 00, 00, 00}; //闹钟
+  26          char cal_time[] = {00, 00, 00}; //倒计时
+  27          void Timeshow(void) //时钟显示功能
+  28          {
+  29   1              LCD_ShowString(1, 1, "    ");
+  30   1              LCD_ShowString(1, 13, "    ");
+  31   1              LCD_ShowString(1, 7, "-");
+  32   1              LCD_ShowString(1, 10, "-");
+  33   1              LCD_ShowString(2, 1, "    ");
+  34   1              LCD_ShowString(2, 13, "   ");
+  35   1              LCD_ShowString(2, 7, ":");
+  36   1              LCD_ShowString(2, 10, ":");
+  37   1              LCD_ShowNum(1, 5, DS1302_time[0], 2);
+  38   1              LCD_ShowNum(1, 8, DS1302_time[1], 2);
+  39   1              LCD_ShowNum(1, 11, DS1302_time[2], 2);
+  40   1              LCD_ShowNum(2, 5, DS1302_time[3], 2);
+  41   1              LCD_ShowNum(2, 8, DS1302_time[4], 2);
+  42   1              LCD_ShowNum(2, 11, DS1302_time[5], 2);
+  43   1              if(startflag) LCD_ShowChar(2,16,'*');
+  44   1              else LCD_ShowChar(2,16,' ');
+  45   1      }
+  46          
+  47          void Timeset(void) //时钟设置功能
+  48          {
+  49   1              if(KeyNum == 2)
+  50   1              {
+  51   2                      KeyNum = 0;
+  52   2                      Timesetselect++;
+  53   2                      Timesetselect %= 6; //越界清零
+  54   2              }
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 2   
+
+  55   1              if(KeyNum == 3)
+  56   1              {
+  57   2                      KeyNum = 0;
+  58   2                      DS1302_time[Timesetselect]++;
+  59   2                      if(DS1302_time[0]>99) DS1302_time[0] = 0;
+  60   2                      if(DS1302_time[1]>12) DS1302_time[1] = 1;
+  61   2                      if(DS1302_time[1] == 1 || DS1302_time[1] == 3 || DS1302_time[1] == 5 ||
+  62   2                              DS1302_time[1] == 7 || DS1302_time[1] == 8 || DS1302_time[1] == 10 ||
+  63   2                              DS1302_time[1] == 12)
+  64   2                      {
+  65   3                              if(DS1302_time[2]>31) DS1302_time[2] = 1;
+  66   3                      }
+  67   2                      else if(DS1302_time[1] == 4 || DS1302_time[1] == 6 || DS1302_time[1] == 9 ||
+  68   2                              DS1302_time[1] == 11)
+  69   2                      {
+  70   3                              if(DS1302_time[2]>30) DS1302_time[2] = 1;
+  71   3                      }
+  72   2                      else if(DS1302_time[1] == 2)
+  73   2                      {
+  74   3                              if(DS1302_time[0] % 4 == 0)
+  75   3                              {
+  76   4                                      if(DS1302_time[2]>29) DS1302_time[2] = 1;
+  77   4                              }
+  78   3                              else 
+  79   3                              {
+  80   4                                      if(DS1302_time[2]>28) DS1302_time[2] = 1;
+  81   4                              }
+  82   3                      }
+  83   2                      if(DS1302_time[3]>23) DS1302_time[3] = 0;
+  84   2                      if(DS1302_time[4]>59) DS1302_time[4] = 0;
+  85   2                      if(DS1302_time[5]>59) DS1302_time[5] = 0;
+  86   2                      if(DS1302_time[6]>7) DS1302_time[6] = 1;
+  87   2              }
+  88   1              if(KeyNum == 33)
+  89   1              {
+  90   2                      KeyNum = 0;
+  91   2                      DS1302_time[Timesetselect]--;
+  92   2                      if(DS1302_time[0] == 0) DS1302_time[0] = 99;
+  93   2                      if(DS1302_time[1] == 0) DS1302_time[1] = 12;
+  94   2                      if(DS1302_time[1] == 1 || DS1302_time[1] == 3 || DS1302_time[1] == 5 ||
+  95   2                              DS1302_time[1] == 7 || DS1302_time[1] == 8 || DS1302_time[1] == 10 ||
+  96   2                              DS1302_time[1] == 12)
+  97   2                      {
+  98   3                              if(DS1302_time[2] == 0) DS1302_time[2] = 31;
+  99   3                      }
+ 100   2                      else if(DS1302_time[1] == 4 || DS1302_time[1] == 6 || DS1302_time[1] == 9 ||
+ 101   2                              DS1302_time[1] == 11)
+ 102   2                      {
+ 103   3                              if(DS1302_time[2] == 0 || DS1302_time[2] > 30) DS1302_time[2] = 30;
+ 104   3                      }
+ 105   2                      else if(DS1302_time[1] == 2)
+ 106   2                      {
+ 107   3                              if(DS1302_time[0] % 4 == 0)
+ 108   3                              {
+ 109   4                                      if(DS1302_time[2] == 0 || DS1302_time[2] > 29) DS1302_time[2] = 29;
+ 110   4                                      
+ 111   4                              }
+ 112   3                              else 
+ 113   3                              {
+ 114   4                                      if(DS1302_time[2] == 0 || DS1302_time[2] > 28) DS1302_time[2] = 28;
+ 115   4                              }
+ 116   3                      }
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 3   
+
+ 117   2                      if(DS1302_time[3] < 0) DS1302_time[3] = 23;
+ 118   2                      if(DS1302_time[4] < 0) DS1302_time[4] = 59;
+ 119   2                      if(DS1302_time[5] < 0) DS1302_time[5] = 59;
+ 120   2                      if(DS1302_time[6] < 0) DS1302_time[6] = 7;
+ 121   2              }
+ 122   1              if(Timesetselect == 0 && flag == 1) {LCD_ShowString(1, 5, "  ");}
+ 123   1              else {LCD_ShowNum(1, 5, DS1302_time[0], 2);}
+ 124   1              if(Timesetselect == 1 && flag == 1) {LCD_ShowString(1, 8, "  ");}
+ 125   1              else {LCD_ShowNum(1, 8, DS1302_time[1], 2);}
+ 126   1              if(Timesetselect == 2 && flag == 1) {LCD_ShowString(1, 11, "  ");}
+ 127   1              else {LCD_ShowNum(1, 11, DS1302_time[2], 2);}
+ 128   1              if(Timesetselect == 3 && flag == 1) {LCD_ShowString(2, 5, "  ");}
+ 129   1              else {LCD_ShowNum(2, 5, DS1302_time[3], 2);}
+ 130   1              if(Timesetselect == 4 && flag == 1) {LCD_ShowString(2, 8, "  ");}
+ 131   1              else {LCD_ShowNum(2, 8, DS1302_time[4], 2);}
+ 132   1              if(Timesetselect == 5 && flag == 1) {LCD_ShowString(2, 11, "  ");}
+ 133   1              else {LCD_ShowNum(2, 11, DS1302_time[5], 2);}
+ 134   1      }
+ 135          
+ 136          void Alarmshow(void) //闹钟钟显示功能
+ 137          {
+ 138   1              alarm_time[0] = AT24C02_readbyte(0);
+ 139   1              alarm_time[1] = AT24C02_readbyte(1);
+ 140   1              alarm_time[2] = AT24C02_readbyte(2);
+ 141   1              alarm_time[3] = AT24C02_readbyte(3);
+ 142   1              LCD_ShowString(1, 1, "Alarm Clock:");
+ 143   1              LCD_ShowNum(2, 5, alarm_time[0], 2);
+ 144   1              LCD_ShowNum(2, 8, alarm_time[1], 2);
+ 145   1              LCD_ShowNum(2, 11, alarm_time[2], 2);
+ 146   1              if(alarm_time[3]) {LCD_ShowString(1, 14, "ON ");}
+ 147   1              else {LCD_ShowString(1, 14, "OFF");}
+ 148   1      }
+ 149          
+ 150          void Alarmsave(void) //闹钟存储功能
+ 151          {
+ 152   1              AT24C02_writebyte(0,alarm_time[0]);
+ 153   1              Delay(5);
+ 154   1              AT24C02_writebyte(1,alarm_time[1]);
+ 155   1              Delay(5);
+ 156   1              AT24C02_writebyte(2,alarm_time[2]);
+ 157   1              Delay(5);
+ 158   1              AT24C02_writebyte(3,alarm_time[3]);
+ 159   1              Delay(5);
+ 160   1      }
+ 161          
+ 162          void Alarmset(void) //闹钟设置功能
+ 163          {
+ 164   1              if(KeyNum == 2)
+ 165   1              {
+ 166   2                      KeyNum = 0;
+ 167   2                      Timesetselect++;
+ 168   2                      Timesetselect %= 4; //越界清零
+ 169   2              }
+ 170   1              if(KeyNum == 3)
+ 171   1              {
+ 172   2                      KeyNum = 0;
+ 173   2                      alarm_time[Timesetselect]++;
+ 174   2                      if(alarm_time[0] > 23) alarm_time[0] = 0;
+ 175   2                      if(alarm_time[1] > 59) alarm_time[1] = 0;
+ 176   2                      if(alarm_time[2] > 59) alarm_time[2] = 0;
+ 177   2                      if(alarm_time[3] > 1) alarm_time[3] = 0;
+ 178   2              }
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 4   
+
+ 179   1              if(KeyNum == 33)
+ 180   1              {
+ 181   2                      KeyNum = 0;
+ 182   2                      alarm_time[Timesetselect]--;
+ 183   2                      if(alarm_time[0] < 0) alarm_time[0] = 23;
+ 184   2                      if(alarm_time[1] < 0) alarm_time[1] = 59;
+ 185   2                      if(alarm_time[2] < 0) alarm_time[2] = 59;
+ 186   2                      if(alarm_time[3] < 0) alarm_time[3] = 1;
+ 187   2              }
+ 188   1              if(Timesetselect == 0 && flag == 1) {LCD_ShowString(2, 5, "  ");}
+ 189   1              else {LCD_ShowNum(2, 5, alarm_time[0], 2);}
+ 190   1              if(Timesetselect == 1 && flag == 1) {LCD_ShowString(2, 8, "  ");}
+ 191   1              else {LCD_ShowNum(2, 8, alarm_time[1], 2);}
+ 192   1              if(Timesetselect == 2 && flag == 1) {LCD_ShowString(2, 11, "  ");}
+ 193   1              else {LCD_ShowNum(2, 11, alarm_time[2], 2);}
+ 194   1              if(Timesetselect == 3 && flag == 1) {LCD_ShowString(1, 14, "   ");}
+ 195   1              else 
+ 196   1              {
+ 197   2                      if(alarm_time[3]) {LCD_ShowString(1, 14, "ON ");}
+ 198   2                      else {LCD_ShowString(1, 14, "OFF");}
+ 199   2              }
+ 200   1              saveflag = 1;
+ 201   1      }
+ 202          
+ 203          void AlarmCheck() //闹钟判断
+ 204          {
+ 205   1              uchar i;
+ 206   1              if(DS1302_time[3] == alarm_time[0] && DS1302_time[4] == alarm_time[1] && DS1302_time[5] == alarm_time[2])
+ 207   1              {
+ 208   2                      Alarmflag = 1;
+ 209   2                      for(i=0;i<8;i++)
+ 210   2                              UART_Sendbyte(end[i]);
+ 211   2                      for(i=0;i<2;i++)
+ 212   2                              UART_Sendbyte(back[i]);
+ 213   2              }
+ 214   1      }
+ 215          
+ 216          void Alarmbeep() //闹钟响铃
+ 217          {
+ 218   1              while(KeyNum != 3 && KeyNum != 2)
+ 219   1              {
+ 220   2                      Buzzer_time();
+ 221   2              }
+ 222   1              KeyNum = 0;
+ 223   1      }
+ 224          
+ 225          void Getupcheck(void) //起床检测
+ 226          {
+ 227   1              if(HC_SR501) getupflag = 1;
+ 228   1              else getupflag = 0;
+ 229   1              if(KeyNum == 22)
+ 230   1              {
+ 231   2                      KeyNum = 0;
+ 232   2                      startflag = !startflag;
+ 233   2              }
+ 234   1      }
+ 235          
+ 236          void smartalarm(void) //智能闹铃功能
+ 237          {
+ 238   1              if(startflag && warning && getupflag)
+ 239   1              {
+ 240   2                      uchar i;
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 5   
+
+ 241   2                      for(i=0;i<8;i++)
+ 242   2                              UART_Sendbyte(end[i]);
+ 243   2                      for(i=0;i<2;i++)
+ 244   2                              UART_Sendbyte(back[i]);
+ 245   2                      Alarmbeep();
+ 246   2              }
+ 247   1      }
+ 248          
+ 249          void Uart_bluetooth(void)//蓝牙串口
+ 250          {
+ 251   1              uchar i;
+ 252   1              if(dataGetBuff[1] == 0x20)       //设置闹钟
+ 253   1              {
+ 254   2                      switch(dataGetBuff[2])
+ 255   2                      {
+ 256   3                              case 0x00:i = 0;break;
+ 257   3                              case 0x01:i = 1;break;
+ 258   3                              case 0x02:i = 2;break;
+ 259   3                              case 0x03:i = 3;break;
+ 260   3                      }
+ 261   2                      if(dataGetBuff[3] == 0x00)
+ 262   2                      {
+ 263   3                              alarm_time[i] += 1;
+ 264   3                              if(alarm_time[0] > 23) alarm_time[0] = 0;
+ 265   3                              if(alarm_time[1] > 59) alarm_time[1] = 0;
+ 266   3                              if(alarm_time[2] > 59) alarm_time[2] = 0;
+ 267   3                              if(alarm_time[3] > 1) alarm_time[3] = 0;
+ 268   3                      }
+ 269   2                      else 
+ 270   2                      {
+ 271   3                              alarm_time[i] -= 1;
+ 272   3                              if(alarm_time[0] < 0) alarm_time[0] = 23;
+ 273   3                              if(alarm_time[1] < 0) alarm_time[1] = 59;
+ 274   3                              if(alarm_time[2] < 0) alarm_time[2] = 59;
+ 275   3                              if(alarm_time[3] < 0) alarm_time[3] = 1;
+ 276   3                      }
+ 277   2                      for(i=0;i<5;i++)
+ 278   2                      {
+ 279   3                              UART_Sendbyte(dataGetBuff[i]);
+ 280   3                      }
+ 281   2                      saveflag = 1;
+ 282   2              }
+ 283   1              else if(dataGetBuff[1] == 0x30)  //获取温湿度
+ 284   1              {
+ 285   2                      if(dataGetBuff[2] == 0x00)
+ 286   2                      {
+ 287   3                              for(i=0;i<8;i++)
+ 288   3                              {
+ 289   4                                      UART_Sendbyte(welcome[i]);
+ 290   4                              }
+ 291   3                      }
+ 292   2                      if(dataGetBuff[3] == 0x00)
+ 293   2                      {
+ 294   3                              for(i=0;i<5;i++)
+ 295   3                              {
+ 296   4                                      UART_Sendbyte(tempstr[i]);
+ 297   4                              }
+ 298   3                              UART_Sendbyte(DHT11_DATA[2]/10 + 0x30);
+ 299   3                              UART_Sendbyte(DHT11_DATA[2]%10 + 0x30);
+ 300   3                              UART_Sendbyte('.');
+ 301   3                              UART_Sendbyte(DHT11_DATA[3]%10 + 0x30);
+ 302   3                              for(i=0;i<2;i++)
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 6   
+
+ 303   3                              {
+ 304   4                                      UART_Sendbyte(back[i]);
+ 305   4                              }
+ 306   3                      }
+ 307   2                      else 
+ 308   2                      {
+ 309   3                              for(i=0;i<5;i++)
+ 310   3                              {
+ 311   4                                      UART_Sendbyte(humistr[i]);
+ 312   4                              }
+ 313   3                              UART_Sendbyte(DHT11_DATA[0]/10 + 0x30);
+ 314   3                              UART_Sendbyte(DHT11_DATA[0]%10 + 0x30);
+ 315   3                              UART_Sendbyte('.');
+ 316   3                              UART_Sendbyte(DHT11_DATA[1]%10 + 0x30);
+ 317   3                              for(i=0;i<2;i++)
+ 318   3                              {
+ 319   4                                      UART_Sendbyte(back[i]);
+ 320   4                              }
+ 321   3                      }
+ 322   2              }
+ 323   1      }
+ 324          
+ 325          void Timebeep(void) // 整点报时
+ 326          {
+ 327   1              if(DS1302_time[4] == 0 && DS1302_time[5] == 0)
+ 328   1              {
+ 329   2                      Buzzer_time();
+ 330   2              }
+ 331   1      }
+ 332          
+ 333          void Tempget(void) //定期刷新温湿度，周期1s
+ 334          {
+ 335   1              if(Tempflag)
+ 336   1              {
+ 337   2                      TR0 = 0;
+ 338   2                      DHT11_Readdata();
+ 339   2                      TR0 = 1;
+ 340   2              }
+ 341   1      }
+ 342          
+ 343          void Tempshow()  // 温湿度显示
+ 344          {
+ 345   1              LCD_ShowString(1, 1, "Temp: ");
+ 346   1              LCD_ShowString(2, 1, "Humi: ");
+ 347   1              
+ 348   1              LCD_ShowNum(1,7,DHT11_DATA[2],2);
+ 349   1              LCD_ShowChar(1,9,'.');
+ 350   1              LCD_ShowNum(1,10,DHT11_DATA[3],1);
+ 351   1              LCD_ShowString(1,11," C    ");
+ 352   1                      
+ 353   1              LCD_ShowNum(2,7,DHT11_DATA[0],2);
+ 354   1              LCD_ShowChar(2,9,'.');
+ 355   1              LCD_ShowNum(2,10,DHT11_DATA[1],1);
+ 356   1              LCD_ShowString(2,11," %    ");
+ 357   1              
+ 358   1      }
+ 359          void timingshow() //倒计时显示
+ 360          {
+ 361   1              LCD_ShowString(1, 1, "   --Timer--   ");
+ 362   1              LCD_ShowString(2,1,"    ");
+ 363   1              LCD_ShowString(2,13,"    ");
+ 364   1              LCD_ShowChar(2,7,':');
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 7   
+
+ 365   1              LCD_ShowChar(2,10,':');
+ 366   1              LCD_ShowNum(2, 5, cal_time[0], 2);
+ 367   1              LCD_ShowNum(2, 8, cal_time[1], 2);
+ 368   1              LCD_ShowNum(2, 11, cal_time[2], 2);
+ 369   1      }
+ 370          
+ 371          void timing(void) //倒计时功能
+ 372          {
+ 373   1              uchar i = 10;
+ 374   1              if(upflag && (cal_time[0] != 0 || cal_time[1] != 0 || cal_time[2] != 0))
+ 375   1              {
+ 376   2                      upflag = 0;
+ 377   2                      upflag_2 = 1;
+ 378   2                      if(cal_time[2] == 0 && (cal_time[0] != 0 || cal_time[1] != 0))
+ 379   2                      {
+ 380   3                              cal_time[2] = 59;
+ 381   3                              cal_time[1]--;
+ 382   3                              if(cal_time[1] < 0 && cal_time[0] != 0)
+ 383   3                              {
+ 384   4                                      cal_time[0]--;
+ 385   4                                      cal_time[1] = 59;
+ 386   4                              }
+ 387   3                      }
+ 388   2                      cal_time[2]--;
+ 389   2              }
+ 390   1              while(cal_time[0]==0 && cal_time[1]==0 && cal_time[2]==0 && upflag_2)
+ 391   1              {       
+ 392   2                      while(i--)
+ 393   2                      {
+ 394   3                              Buzzer_time();//蜂鸣器长响
+ 395   3                      }
+ 396   2                      upflag_2=0;
+ 397   2              }
+ 398   1      }
+ 399          
+ 400          void timerset(void) //倒计时设置
+ 401          {
+ 402   1              if(KeyNum == 2)
+ 403   1              {
+ 404   2                      KeyNum = 0;
+ 405   2                      Timesetselect++;
+ 406   2                      Timesetselect %= 3; //越界清零
+ 407   2              }
+ 408   1              if(KeyNum == 3)
+ 409   1              {
+ 410   2                      KeyNum = 0;
+ 411   2                      cal_time[Timesetselect]++;
+ 412   2                      if(cal_time[0] > 23) cal_time[0] = 0;
+ 413   2                      if(cal_time[1] > 59) cal_time[1] = 0;
+ 414   2                      if(cal_time[2] > 59) cal_time[2] = 0;
+ 415   2              }
+ 416   1              if(KeyNum == 33)
+ 417   1              {
+ 418   2                      KeyNum = 0;
+ 419   2                      cal_time[Timesetselect]--;
+ 420   2                      if(cal_time[0] < 0) cal_time[0] = 23;
+ 421   2                      if(cal_time[1] < 0) cal_time[1] = 59;
+ 422   2                      if(cal_time[2] < 0) cal_time[2] = 59;
+ 423   2              }
+ 424   1              if(Timesetselect == 0 && flag == 1) {LCD_ShowString(2, 5, "  ");}
+ 425   1              else {LCD_ShowNum(2, 5, cal_time[0], 2);}
+ 426   1              if(Timesetselect == 1 && flag == 1) {LCD_ShowString(2, 8, "  ");}
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 8   
+
+ 427   1              else {LCD_ShowNum(2, 8, cal_time[1], 2);}
+ 428   1              if(Timesetselect == 2 && flag == 1) {LCD_ShowString(2, 11, "  ");}
+ 429   1              else {LCD_ShowNum(2, 11, cal_time[2], 2);}
+ 430   1      //      if(cal_time[0] > 0 || cal_time[1] > 0 || cal_time[2] > 0)
+ 431   1      //      {
+ 432   1      //              runflag = 0;
+ 433   1      //      }
+ 434   1      }
+ 435          
+ 436          void main()
+ 437          {
+ 438   1              LCD_Init();
+ 439   1              //DS1302_Init();
+ 440   1              Buzzer_Init();
+ 441   1              T0_mod1_init();
+ 442   1              UART_Init();
+ 443   1              DS1302_Settime();
+ 444   1              LCD_ShowString(1, 1, "  Alarm Clock  ");
+ 445   1              LCD_ShowString(2, 1, "  ---Loding--  ");
+ 446   1              Delay(1500);
+ 447   1              LCD_ShowString(1, 1, "               ");
+ 448   1              LCD_ShowString(2, 1, "               ");
+ 449   1              while(1)
+ 450   1              {
+ 451   2                      Key_Scan();
+ 452   2                      Tempget();
+ 453   2                      DS1302_Readtime();
+ 454   2                      Timebeep();
+ 455   2                      AlarmCheck();
+ 456   2                      Getupcheck();
+ 457   2                      smartalarm();
+ 458   2                      if(saveflag)
+ 459   2                      {
+ 460   3                              Alarmsave();
+ 461   3                              saveflag = 0;
+ 462   3                      }
+ 463   2                      if(alarm_time[3]&&Alarmflag) 
+ 464   2                      {
+ 465   3                              Alarmbeep();
+ 466   3                              Alarmflag = 0;
+ 467   3                              warning = 1;
+ 468   3                      }
+ 469   2                      if(KeyNum == 1)  //模式选择
+ 470   2                      {
+ 471   3                              KeyNum = 0;
+ 472   3                              MODE1++;
+ 473   3                              MODE1 %= 4;
+ 474   3                              if(MODE1 == 0) {MODE2 = 0;Buzzer_time();Timesetselect = 0;}
+ 475   3                              else if(MODE1 == 1) {MODE2 = 0;Buzzer_time();Timesetselect = 0;}
+ 476   3                              else if(MODE1 == 2) {MODE2 = 0;Buzzer_time();}
+ 477   3                              else if(MODE1 == 3) {MODE2 = 0;Buzzer_time();}
+ 478   3                      }
+ 479   2                      if(KeyNum == 4)  //修改 or 确认
+ 480   2                      {
+ 481   3                              KeyNum = 0;
+ 482   3                              if(MODE2 == 0) MODE2 = 1;
+ 483   3                              else MODE2 = 0;
+ 484   3                      } 
+ 485   2                      switch(MODE1)
+ 486   2                      {
+ 487   3                              case 0:
+ 488   3                                      if(MODE2) 
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 9   
+
+ 489   3                                      {
+ 490   4                                              Timeset();
+ 491   4                                              DS1302_Settime();
+ 492   4                                      }
+ 493   3                                      else Timeshow();
+ 494   3                                      break;
+ 495   3                              case 1:
+ 496   3                                      if(MODE2) Alarmset();
+ 497   3                                      else Alarmshow();
+ 498   3                                      break;
+ 499   3                              case 2:
+ 500   3                                      Tempshow();
+ 501   3                                      break;
+ 502   3                              case 3:
+ 503   3                                      if(MODE2) timerset();
+ 504   3                                      else
+ 505   3                                      {       
+ 506   4                                              timing();
+ 507   4                                              timingshow();                                   
+ 508   4                                      }
+ 509   3                                      break;
+ 510   3                      }
+ 511   2              }
+ 512   1      }
+ 513          
+ 514          void T0_rupt() interrupt 1  //1毫秒@11.0592MHz
+ 515          {
+ 516   1              static unsigned int T0Count0, T0Count1, T0Count2;
+ 517   1              TL0 = 0x66;             //设置定时初值
+ 518   1              TH0 = 0xFC;             //设置定时初值
+ 519   1              T0Count0++;
+ 520   1              Key_Scan();
+ 521   1              if(T0Count0 >= 400)
+ 522   1              {
+ 523   2                      T0Count0 = 0;
+ 524   2                      flag = !flag;
+ 525   2              }
+ 526   1              T0Count1++;
+ 527   1              if(T0Count1 >= 1000)
+ 528   1              {
+ 529   2                      T0Count1 = 0;
+ 530   2                      Tempflag = !Tempflag;
+ 531   2              }
+ 532   1              T0Count2++;
+ 533   1              if(T0Count2 >= 1000)
+ 534   1              {
+ 535   2                      T0Count2 = 0;
+ 536   2                      upflag = 1;
+ 537   2              }
+ 538   1      }
+ 539          
+ 540          void UartRoutine(void) interrupt 4
+ 541          {
+ 542   1              uchar res;      
+ 543   1              if(RI)
+ 544   1              {
+ 545   2                      res = SBUF;
+ 546   2                      if(dataGetBuffCount == 0 && res == 0xAA)
+ 547   2                      {
+ 548   3                              dataGetBuff[dataGetBuffCount] = res;
+ 549   3                              dataGetBuffCount++;
+ 550   3                      }else if(dataGetBuffCount!=0)
+C51 COMPILER V9.59.0.0   MAIN                                                              12/09/2022 23:34:51 PAGE 10  
+
+ 551   2                      {
+ 552   3                              dataGetBuff[dataGetBuffCount] = res;
+ 553   3                              dataGetBuffCount++;
+ 554   3                              if(dataGetBuffCount == 5 && res == 0xDD)
+ 555   3                              {
+ 556   4                                      dataGetBuffCount = 0;
+ 557   4                                      Uart_bluetooth();
+ 558   4                              }
+ 559   3                      }
+ 560   2                      RI = 0;
+ 561   2              }       
+ 562   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3184    ----
+   CONSTANT SIZE    =    158    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     32       4
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
